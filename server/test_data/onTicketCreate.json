@@ -1,0 +1,31 @@
+{
+  "data": {
+    "ticket": {
+      "id": 67152,
+      "subject": "Outlook keeps asking for password after VPN connect",
+      "description": "<div>Since this morning, every time I connect to the VPN, Outlook prompts me for my password repeatedly and never accepts it. Restarting did not help. I'm on a company laptop, Windows 11.</div>",
+      "description_text": "Since this morning, every time I connect to the VPN, Outlook prompts me for my password repeatedly and never accepts it. Restarting did not help. I'm on a company laptop, Windows 11.",
+      "status": 2,
+      "priority": 2,
+      "source": 1,
+      "group_id": null,
+      "requester_id": 5005,
+      "type": "Incident",
+      "category": "To Be Defined",
+      "sub_category": "Suggested Category in Notes"
+    },
+    "requester": {
+      "id": 5005,
+      "name": "Test Requester",
+      "email": "test.requester@example.com"
+    }
+  },
+  "iparams": {
+    "freshservice_domain": "example.freshservice.com",
+    "freshservice_api_key": "REPLACE_WITH_FS_KEY_FOR_LOCAL_TEST",
+    "anthropic_api_key": "REPLACE_WITH_ANTHROPIC_KEY_FOR_LOCAL_TEST",
+    "claude_model": "claude-haiku-4-5-20251001",
+    "output_budget": 512,
+    "poc_group_id": null
+  }
+}

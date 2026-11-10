@@ -1,0 +1,2224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI-Triage Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script src="{{{appclient}}}"></script>
+<style>
+/* ── tokens ─────────────────────────────────────────────────────────── */
+:root {
+  --bg:           #F0F2F5;
+  --surface:      #FFFFFF;
+  --surface-alt:  #F7F8FA;
+  --border:       #D8DCE5;
+  --text:         #1C2333;
+  --text-muted:   #5E6E85;
+  --accent:       #3A7FD8;
+  --accent-dim:   #EBF3FF;
+  --warn:         #D08A18;
+  --warn-dim:     #FFF7E6;
+  --ok:           #1F8C5A;
+  --ok-dim:       #EAFAF2;
+  --row-hover:    #F3F6FB;
+  --shadow:       0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  --radius:       6px;
+  --font-mono:    'IBM Plex Mono', 'Menlo', 'Consolas', monospace;
+  --font-sans:    'IBM Plex Sans', 'system-ui', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:           #0B0E12;
+    --surface:      #161A21;
+    --surface-alt:  #1C2130;
+    --border:       #252C38;
+    --text:         #CDD5E0;
+    --text-muted:   #62748E;
+    --accent:       #5A9CF5;
+    --accent-dim:   #1A2540;
+    --warn:         #E8A838;
+    --warn-dim:     #2A2010;
+    --ok:           #48B076;
+    --ok-dim:       #0E2018;
+    --row-hover:    #1E2538;
+    --shadow:       0 1px 3px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:           #0B0E12;
+  --surface:      #161A21;
+  --surface-alt:  #1C2130;
+  --border:       #252C38;
+  --text:         #CDD5E0;
+  --text-muted:   #62748E;
+  --accent:       #5A9CF5;
+  --accent-dim:   #1A2540;
+  --warn:         #E8A838;
+  --warn-dim:     #2A2010;
+  --ok:           #48B076;
+  --ok-dim:       #0E2018;
+  --row-hover:    #1E2538;
+  --shadow:       0 1px 3px rgba(0,0,0,.3);
+}
+
+/* ── reset ───────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button { cursor: pointer; font-family: inherit; }
+input { font-family: inherit; }
+
+/* ── layout ──────────────────────────────────────────────────────────── */
+.page { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+  height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.topbar-logo {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.topbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.topbar-title {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+}
+.topbar-spacer { flex: 1; }
+.topbar-loading {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.range-tabs { display: flex; gap: 2px; }
+.range-tab {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  border-radius: var(--radius);
+  transition: all .12s;
+}
+.range-tab:hover { background: var(--row-hover); color: var(--text); }
+.range-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+/* Locked while a fetch is in flight — see setLoading(). */
+.range-tab.is-busy { opacity: .55; cursor: progress; }
+.range-tab.is-busy:hover { background: none; }
+.range-tab.active.is-busy:hover { background: var(--accent); }
+.range-custom { display: flex; align-items: center; gap: 4px; }
+.range-custom input[type="date"] {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-sans);
+}
+.range-custom input[type="date"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.range-custom-label { font-size: 12px; color: var(--text-muted); }
+.search-wrap { position: relative; flex: 1; min-width: 160px; max-width: 240px; }
+.search-wrap svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+.search-input {
+  width: 100%;
+  padding: 5px 8px 5px 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font-mono);
+}
+.search-input::placeholder { color: var(--text-muted); font-family: var(--font-sans); }
+.search-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all .12s;
+}
+.filter-toggle:hover { background: var(--row-hover); color: var(--text); }
+/* Matches .filter-toggle so the control row reads as one set. `appearance: none` plus an
+   inline SVG chevron, because the native select arrow renders in the OS theme and looks
+   wrong against the dark palette. */
+.model-filter {
+  padding: 5px 26px 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all .12s;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235E6E85' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+}
+.model-filter:hover { background-color: var(--row-hover); color: var(--text); }
+/* Any value other than "All models" is an active narrowing — make that unmissable, since
+   a filtered total is easy to mistake for the whole picture. Driven by a class, not an
+   attribute selector: assigning select.value in JS sets the PROPERTY, leaving the value
+   attribute untouched, so [value=""] would never have matched. */
+.model-filter.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.model-filter option { background: var(--surface); color: var(--text); }
+.filter-toggle.active {
+  background: var(--warn-dim);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.filter-toggle .warn-icon { font-size: 13px; }
+.filter-toggle.deflect-active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.deflect-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: default;
+  white-space: nowrap;
+}
+
+/* ── stats strip ─────────────────────────────────────────────────────── */
+.stats-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+@media (max-width: 640px) {
+  .stats-strip { grid-template-columns: repeat(2, 1fr); }
+}
+.stat-tile {
+  padding: 14px 20px;
+  border-right: 1px solid var(--border);
+}
+.stat-tile:last-child { border-right: none; }
+.stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.stat-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.stat-warn { color: var(--warn); }
+
+/* ── main content ────────────────────────────────────────────────────── */
+.main { flex: 1; padding: 0; min-height: 0; display: flex; flex-direction: column; }
+.table-wrap { flex: 1; min-height: 0; overflow-y: auto; overflow-x: auto; }
+
+table {
+  width: 100%;
+  /* separate (not collapse) is required for position:sticky on th to work in all browsers */
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+th {
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  user-select: none;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--surface-alt);
+  border-bottom: 2px solid var(--border);
+}
+th.sortable { cursor: pointer; }
+th.sortable:hover { color: var(--text); }
+th .sort-arrow { margin-left: 4px; opacity: 0.4; font-size: 9px; }
+th.sort-asc .sort-arrow, th.sort-desc .sort-arrow { opacity: 1; color: var(--accent); }
+
+tbody tr { transition: background .08s; }
+tbody tr:hover { background: var(--row-hover); }
+td { padding: 8px 12px; vertical-align: middle; border-bottom: 1px solid var(--border); }
+td.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.inc-link { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+.subject-cell { max-width: 280px; }
+.subject-text { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+.tokens-cell { display: flex; align-items: center; gap: 6px; }
+/* Which AI produced the row. Colour-coded by provider so a mixed Claude/ChatGPT run is
+   scannable at a glance — the whole point of recording provider per entry. */
+.model-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+.model-badge.is-anthropic { background: var(--accent-dim); color: var(--accent); }
+.model-badge.is-openai    { background: var(--ok-dim);     color: var(--ok); }
+.model-badge.is-unknown   { background: var(--surface-alt); color: var(--text-muted); }
+.trunc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  background: var(--warn-dim);
+  color: var(--warn);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: default;
+  white-space: nowrap;
+}
+.cost-cell { color: var(--ok); }
+.cost-per-k { color: var(--text-muted); }
+.dur-cell { color: var(--text-muted); }
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.empty-state-icon {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--border);
+  letter-spacing: -1px;
+}
+.empty-heading { font-weight: 600; color: var(--text-muted); }
+
+.footer {
+  padding: 10px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.footer-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  display: inline-block;
+}
+
+/* error banner */
+.error-banner {
+  margin: 12px 20px;
+  padding: 10px 14px;
+  background: var(--warn-dim);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--warn);
+  display: none;
+}
+
+/* Admin action report — stays until dismissed so a destructive action always leaves
+   evidence of what it did. Scrolls internally; never grows the page. */
+.admin-report {
+  margin: 12px 20px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  flex-shrink: 0;
+}
+.admin-report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: var(--text);
+}
+.admin-report-close {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.admin-report-close:hover { background: var(--row-hover); color: var(--text); }
+.admin-report-body {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 320px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre;
+  tab-size: 2;
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- top bar -->
+  <header class="topbar">
+    <span class="topbar-logo">AI-TRIAGE</span>
+    <span class="topbar-sep"></span>
+    <span class="topbar-title">Cost &amp; Activity Report</span>
+    <span class="topbar-spacer"></span>
+    <span class="topbar-loading" id="loading-indicator">Loading…</span>
+  </header>
+
+  <!-- controls -->
+  <div class="controls">
+    <div class="range-tabs" role="group" aria-label="Date range">
+      <button class="range-tab active" data-range="today">Today</button>
+      <button class="range-tab" data-range="7">7 days</button>
+      <button class="range-tab" data-range="30">30 days</button>
+      <button class="range-tab" data-range="custom">Custom</button>
+    </div>
+    <div class="range-custom" id="custom-range" style="display:none;">
+      <span class="range-custom-label">From</span>
+      <input type="date" id="date-from">
+      <span class="range-custom-label">to</span>
+      <input type="date" id="date-to">
+    </div>
+    <div class="search-wrap">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="10" y1="10" x2="14" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <input class="search-input" id="search-input" type="search" placeholder="Filter by INC#" aria-label="Filter by INC number">
+    </div>
+    <select class="model-filter" id="model-filter" aria-label="Filter by AI model or provider" title="Show only tickets triaged by a given provider or model. Every figure in the stats strip recalculates, so this is how you compare Claude and ChatGPT cost side by side.">
+      <option value="">All models</option>
+    </select>
+    <button class="filter-toggle" id="trunc-filter" aria-pressed="false" title="Show only tickets where the model's output was cut off by the token limit">
+      <span class="warn-icon">⚠</span> Truncated only
+    </button>
+    <button class="filter-toggle" id="deflect-filter" aria-pressed="false" title="Hide auto-deflected tickets (admin consent, quarantine, SQM, Box/OneDrive links, termination) — they have $0 cost">
+      Hide deflected
+    </button>
+    <button class="filter-toggle" id="consolidate-btn" style="display:none;margin-left:auto;background:var(--warn-dim);border-color:var(--warn);color:var(--warn)" title="Recovery tool: exhaustively scan all shard slots across 45 days, de-duplicate, and collapse everything onto a single day. Use to recover entries stranded behind a short shard.">
+      ⇤ Consolidate to one day
+    </button>
+    <button class="filter-toggle" id="wipe-today-btn" style="display:none;background:#FFF3E0;border-color:#E67E22;color:#E67E22" title="Delete only today's triage log entries, leaving all other days intact. Use to remove test runs that would taint the report before a demo.">
+      ⨯ Wipe today's logs
+    </button>
+    <button class="filter-toggle" id="wipe-btn" style="display:none;background:#FDECEC;border-color:#C0392B;color:#C0392B" title="Permanently delete every stored triage log entry (sandbox test utility). Does not touch tickets in Freshservice — only this report's data.">
+      ⨯ Wipe all log data
+    </button>
+    <button class="filter-toggle" id="seed-btn" style="display:none;background:var(--ok-dim);border-color:var(--ok);color:var(--ok)" title="Write 2,000 synthetic log entries straight to storage, spread over 30 days. Creates no tickets and makes no AI calls — costs nothing. For exercising the report at realistic scale.">
+      ⊕ Seed 2,000 test entries
+    </button>
+    <button class="filter-toggle" id="inspect-btn" style="display:none;background:var(--accent-dim);border-color:var(--accent);color:var(--accent)" title="Read-only: report exactly what is in Data Storage right now — every populated shard, the day index, and the local cache. Changes nothing.">
+      ⌕ Inspect storage
+    </button>
+  </div>
+
+  <!-- admin results: persistent, dismissible report from any admin action. Deliberately
+       NOT a button label — the previous design put results in the button text, which
+       reset after a second and left no evidence of what an action actually did. -->
+  <div class="admin-report" id="admin-report" style="display:none">
+    <div class="admin-report-head">
+      <span id="admin-report-title">Result</span>
+      <button class="admin-report-close" id="admin-report-close" aria-label="Dismiss report">✕</button>
+    </div>
+    <pre class="admin-report-body" id="admin-report-body"></pre>
+  </div>
+
+  <!-- stats strip -->
+  <div class="stats-strip">
+    <div class="stat-tile">
+      <div class="stat-label">Tickets Shown</div>
+      <div class="stat-value" id="stat-count">—</div>
+      <div class="stat-sub" id="stat-date-range">—</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Total Cost</div>
+      <div class="stat-value" id="stat-total-cost">—</div>
+      <div class="stat-sub" id="stat-cost-note">AI triage spend</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Avg per Ticket</div>
+      <div class="stat-value" id="stat-avg-cost">—</div>
+      <div class="stat-sub">input + output + search</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Cost / 1,000 Tickets</div>
+      <div class="stat-value" id="stat-per-k">—</div>
+      <div class="stat-sub" id="stat-trunc-note">—</div>
+    </div>
+  </div>
+
+  <!-- error -->
+  <div class="error-banner" id="error-banner"></div>
+
+  <!-- table -->
+  <div class="main">
+    <div class="table-wrap">
+      <table id="report-table" aria-label="Triage activity log">
+        <thead>
+          <tr>
+            <th class="sortable" data-col="display_id">INC# <span class="sort-arrow" aria-hidden="true">↕</span></th>
+            <th>Subject</th>
+            <th class="sortable" data-col="ts" title="Shown in UTC, matching how entries are bucketed by day">Date / Time (UTC) <span class="sort-arrow" aria-hidden="true">↕</span></th>
+            <th class="sortable" data-col="model" title="Which AI model produced this note. Entries logged before v1.6.0 predate provider tracking.">Model <span class="sort-arrow" aria-hidden="true">↕</span></th>
+            <th class="sortable" data-col="input_tokens">Tokens <span class="sort-arrow" aria-hidden="true">↕</span></th>
+            <th class="sortable" data-col="web_searches">Searches <span class="sort-arrow" aria-hidden="true">↕</span></th>
+            <th class="sortable" data-col="cost_usd">Cost <span class="sort-arrow" aria-hidden="true">↕</span></th>
+            <th>Cost / 1k</th>
+            <th class="sortable" data-col="duration_ms">Duration <span class="sort-arrow" aria-hidden="true">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <tr><td colspan="9">
+            <div class="empty-state">
+              <div class="empty-state-icon">···</div>
+              <div class="empty-heading">Loading data</div>
+            </div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- footer -->
+  <footer class="footer">
+    <span class="footer-dot"></span>
+    <span id="footer-text">AI-Triage report v<span id="app-version">1.8.2</span> — data from FDK Data Storage</span>
+  </footer>
+
+</div>
+<script>
+(function () {
+  'use strict';
+
+  // ── state ────────────────────────────────────────────────────────────
+  var allEntries = [];     // raw, all loaded entries
+  var filtered   = [];     // after search + filter
+  var sortCol    = 'ts';
+  var sortDir    = 'desc';
+  var rangeMode  = 'today';
+  var searchVal  = '';
+  var truncOnly      = false;
+  var modelFilter    = '';   // '' | provider:<id> | model:<id>
+  var hideDeflected  = false;
+  var domain         = '';
+
+  // Data Storage is rate limited (the platform reports "50 requests per minute") and a
+  // limited read does NOT reject — it RESOLVES with an error payload:
+  //   { status: 429, ..., message: "You have exceeded the limit of 50 requests per minute" }
+  // Observed live 2026-08-22. Every read path here previously shape-checked the result
+  // and treated anything unexpected as "no data", so a rate-limited read of a populated
+  // shard was indistinguishable from an empty one.
+  function isErrorPayload(v) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+    if (v.status === 429 || v.status === '429') return true;
+    var msg = typeof v.message === 'string' ? v.message : '';
+    return /exceeded the limit|rate limit|too many requests/i.test(msg);
+  }
+  function looksLikeBucket(v) { return !!v && typeof v === 'object' && Array.isArray(v.entries); }
+
+  // FDK converts top-level arrays to {0:v,1:v,...} objects on client.db retrieval.
+  function toArr(val) {
+    if (isErrorPayload(val)) return [];
+    if (Array.isArray(val)) return val;
+    if (val && typeof val === 'object') {
+      return Object.keys(val).sort(function (a, b) { return a - b; }).map(function (k) { return val[k]; });
+    }
+    return [];
+  }
+  // triage_days must contain YYYY-MM-DD strings and nothing else. Without this an error
+  // payload spread by toArr() became "dates" — a real wipe run scanned a range starting
+  // at "APP" because the 429 body's values were treated as date keys.
+  function toDateList(val) {
+    return toArr(val).filter(function (d) { return typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d); });
+  }
+
+  // ── FDK init ─────────────────────────────────────────────────────────
+  // Debounce loadData() on init: Freshservice PJAX navigation can cause
+  // app.initialized() to fire twice in rapid succession. The debounce coalesces
+  // those into a single loadData() call so a fast second init can't overwrite
+  // good results from the first one with an empty fetch.
+  var client;
+  var initDebounce;
+  if (typeof app !== 'undefined') {
+    // Any cache written by 1.2.15–1.3.0 is already stale in existing browsers and will
+    // render records that no longer exist. Purge on every load, not once — a viewer who
+    // never reloads would otherwise keep seeing deleted data.
+    purgeLegacyCache();
+    app.initialized().then(function (_client) {
+      client = _client;
+      client.iparams.get('freshservice_domain').then(function (data) {
+        domain = (data && data.freshservice_domain) || '';
+      }).catch(function () {});
+      clearTimeout(initDebounce);
+      initDebounce = setTimeout(function () { loadData(); }, 150);
+    }).catch(function (err) {
+      showError('FDK initialisation failed: ' + err);
+      setLoading(false);
+    });
+  } else {
+    // Outside FDK (local dev without fdk run) — show empty state
+    setLoading(false);
+    renderRows([]);
+  }
+
+  // ── date helpers ──────────────────────────────────────────────────────
+  function today() {
+    return new Date().toISOString().slice(0, 10);
+  }
+  function daysAgo(n) {
+    var d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.toISOString().slice(0, 10);
+  }
+  function dateRange() {
+    if (rangeMode === 'today') return { from: today(), to: today() };
+    if (rangeMode === '7')     return { from: daysAgo(6),  to: today() };
+    if (rangeMode === '30')    return { from: daysAgo(29), to: today() };
+    // custom
+    var f = document.getElementById('date-from').value || today();
+    var t = document.getElementById('date-to').value   || today();
+    // An inverted range would otherwise produce zero dates and be stored as a complete
+    // empty result, showing "No triage entries found" with no hint that the dates are
+    // backwards. Swap and carry a flag so the UI can say so.
+    if (f > t) return { from: t, to: f, inverted: true };
+    return { from: f, to: t };
+  }
+  function dateBetween(dateStr, from, to) {
+    return dateStr >= from && dateStr <= to;
+  }
+  function datesInRange(from, to) {
+    var dates = [];
+    var cur = new Date(from + 'T00:00:00');
+    var end = new Date(to   + 'T00:00:00');
+    while (cur <= end) {
+      dates.push(cur.toISOString().slice(0, 10));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return dates;
+  }
+
+  // ── data loading ──────────────────────────────────────────────────────
+  // A generation counter used to live here to discard superseded fetches. It is no
+  // longer needed: only one fetch runs at a time, and each result is filed under its
+  // own range key rather than into shared state.
+
+  // Last good result, cached per browser. Freshservice PJAX navigation can tear down
+  // and recreate the app iframe, which resets allEntries to [] — so the in-memory
+  // resilience guard has nothing to protect and a throttled first fetch renders 0.
+  // Seeding from cache means a fresh context starts populated and the live fetch
+  // only ever replaces it with a non-empty result.
+  // ── request pacing ────────────────────────────────────────────────────
+  // Data Storage allows ~50 requests per minute, shared by this page, the admin tools,
+  // and the serverless writer. Measured 2026-08-22: a 1,200-key scan got 49 reads
+  // through and 1,151 rate-limited 429s — and because a 429 RESOLVES rather than
+  // rejecting, every one of them looked like an empty slot. That is why a wipe could
+  // scan 1,200 slots, "find" nothing, clear nothing, and report success.
+  //
+  // Everything that touches storage goes through this queue. It is deliberately
+  // conservative: exceeding the budget does not just slow things down, it silently
+  // corrupts results.
+  var RATE_PER_MIN = 40;                       // headroom under the ~50 ceiling
+  var MIN_GAP_MS   = Math.ceil(60000 / RATE_PER_MIN);
+  var dbQueue = [];
+  var dbLastSent = 0;
+  var dbPumping = false;
+  var dbPending = 0;
+
+  function pumpQueue() {
+    if (dbPumping) return;
+    dbPumping = true;
+    (function next() {
+      if (!dbQueue.length) { dbPumping = false; return; }
+      var wait = Math.max(0, MIN_GAP_MS - (Date.now() - dbLastSent));
+      setTimeout(function () {
+        var job = dbQueue.shift();
+        if (!job) { dbPumping = false; return; }
+        dbLastSent = Date.now();
+        job.run().then(job.resolve, job.reject);
+        dbPending = dbQueue.length;
+        next();
+      }, wait);
+    })();
+  }
+
+  // Wraps any storage call so it is issued no faster than the budget allows.
+  function paced(run) {
+    return new Promise(function (resolve, reject) {
+      dbQueue.push({ run: run, resolve: resolve, reject: reject });
+      dbPending = dbQueue.length;
+      pumpQueue();
+    });
+  }
+  function pacedGet(key) { return paced(function () { return client.db.get(key); }); }
+  function pacedSet(key, val) { return paced(function () { return client.db.set(key, val); }); }
+  // Rough wall-clock estimate for n paced requests, for progress messages.
+  function pacedEta(n) {
+    var secs = Math.ceil(n * MIN_GAP_MS / 1000);
+    return secs > 90 ? Math.ceil(secs / 60) + ' min' : secs + 's';
+  }
+
+  // A throttled read and an absent key are indistinguishable — both surface as a
+  // rejected promise (404). Retry only where the key is known to exist, so a real
+  // miss costs one read while a throttle gets another chance.
+  // The platform cannot tell us absent vs throttled on a 404, but a resolved-429
+  // payload rethrown by dbGetRetry carries its own wording. That is the only reliable
+  // throttle evidence available on the read path.
+  function looksThrottledError(err) {
+    var m = (err && err.message) ? String(err.message) : '';
+    return /exceeded the limit|rate limit|too many requests|429/i.test(m);
+  }
+
+  function dbGetRetry(key, attempts) {
+    return pacedGet(key).then(function (v) {
+      // Resolved-but-rate-limited. Retry with a longer pause than a normal miss gets —
+      // hammering a 429 immediately just burns more of the quota that caused it.
+      if (isErrorPayload(v)) {
+        if (attempts <= 1) throw new Error(v.message || 'rate limited (429)');
+        return new Promise(function (res) { setTimeout(res, 600); })
+          .then(function () { return dbGetRetry(key, attempts - 1); });
+      }
+      return v;
+    }).catch(function (err) {
+      if (attempts <= 1) throw err;
+      return new Promise(function (res) { setTimeout(res, 120); })
+        .then(function () { return dbGetRetry(key, attempts - 1); });
+    });
+  }
+
+  // Each range owns its own result. Nothing is shared between Today / 7 / 30 / Custom,
+  // so a result from one range can never be compared against, or overwrite, another's.
+  // `allEntries` is only ever a mirror of the active range's slot, for the render path.
+  var CACHE_PREFIX = 'lf_triage_cache:';
+  var rangeStore   = {};   // rangeKey -> { entries: [], complete: bool }
+  var dayIndexReadOk = false;  // could triage_days be read this load? see loadData()
+  var activeRange  = '';   // rangeKey currently displayed
+
+  // Chunk size used ONLY by the admin tools (Seed, Consolidate) when they write shards
+  // directly. It is no longer a contract with the server: the server appends until the
+  // platform's 40KB cap throws, so its shards are size-bounded and hold whatever fits.
+  // The reader walks until a shard is absent and does not consult this at all.
+  // 100 x ~274 bytes = ~27KB, comfortably inside the cap.
+  var SHARD_MAX = 100;
+  // Dates triage_days says hold data, so a failed shard-0 read on one of them is a
+  // throttle rather than an empty day. Refreshed on every load.
+  var knownPopulatedDates = [];
+
+  // The localStorage result cache has been REMOVED. It was added in 1.2.15 so a
+  // PJAX-recreated iframe would not render blank while a throttled fetch returned
+  // nothing — but it cached the fetch result and then outlived the data. Verified by
+  // the storage inspector on 2026-08-22: Data Storage held 0 entries while the 30-day
+  // cache still held 907, so the report displayed 907 rows that existed nowhere. A
+  // cache that can show deleted records is worse than a blank moment, and the reason
+  // it existed (throttled reads returning empty) is fixed — batched sequential reads
+  // with retries now report 0 failed reads across 1,200 slots.
+  //
+  // CACHE_PREFIX is kept only to purge leftovers and to report them in the inspector.
+  function purgeLegacyCache() {
+    var removed = 0;
+    try {
+      Object.keys(localStorage).forEach(function (k) {
+        if (k.indexOf(CACHE_PREFIX) === 0) { localStorage.removeItem(k); removed++; }
+      });
+    } catch (e) { return -1; }
+    return removed;
+  }
+  // True when the active range's scan could NOT read every shard it needed — a throttled
+  // or failed read, not a genuinely empty result. fetchBuckets records this on the slot;
+  // until v1.6.2 nothing ever read it back, so the UI presented partial and complete
+  // results identically.
+  function rangeIncomplete() {
+    var slot = rangeStore[activeRange];
+    return !!slot && slot.complete === false;
+  }
+
+  // Render whichever range is active. Called on switch and on fetch completion.
+  function renderActiveRange() {
+    var slot = rangeStore[activeRange];
+    allEntries = (slot && slot.entries) ? slot.entries : [];
+    renderModelOptions();
+    applyFilters();
+  }
+
+  var isLoading = false;
+  function loadData() {
+    if (!client) return;
+    // Only one fetch at a time: reads already issued to the FDK bridge can't be
+    // cancelled, and overlapping sets are what starve it into throttling.
+    if (isLoading) return;
+
+    var range    = dateRange();
+    if (range.inverted) {
+      showError('Start date is after end date — showing ' + range.from + ' → ' + range.to + ' instead.');
+    }
+    var dates    = datesInRange(range.from, range.to);
+    var rangeKey = range.from + '..' + range.to;
+
+    // Show this range's own in-memory result if we already have one from this session.
+    // Nothing is restored from localStorage — see purgeLegacyCache(); a persisted
+    // result can outlive the data it describes and render deleted records.
+    activeRange = rangeKey;
+    renderActiveRange();
+
+    isLoading = true;
+    setLoading(true);
+    // Single exit point, so no early return can leave the controls locked.
+    function done() { setLoading(false); }
+
+    // triage_days is only an optimisation (skip dates known to hold nothing). It is
+    // NOT authoritative: a throttled read returns 404 or an empty list, and treating
+    // that as "no data exists" would wipe the range. Anything unusable falls back to
+    // scanning the full requested range.
+    //
+    // It IS authoritative in the other direction though: a date listed here definitely
+    // has a shard 0, so a failed read of that shard is provably a throttle rather than
+    // an empty day. fetchBuckets uses that to avoid caching a truncated result.
+    knownPopulatedDates = [];
+    // Whether the day index could be READ at all — distinct from what it contained.
+    // When the bridge is throttled this read fails like any other, and without that fact
+    // recorded the shard-0 heuristic below silently loses its only source of truth and
+    // starts reporting throttled days as empty ones. Assume the worst until proven.
+    dayIndexReadOk = false;
+    dbGetRetry('triage_days', 3).then(function (resp) {
+      var activeDates = toDateList(resp);
+      // A resolved read — even one naming zero dates — proves the store is answering.
+      if (!isErrorPayload(resp)) dayIndexReadOk = true;
+      knownPopulatedDates = activeDates;
+      // The index is NEVER used to narrow what gets scanned any more — only to inform
+      // the shard-0 throttle heuristic in readDateSequential (its "other direction",
+      // which is sound: a date listed here provably HAS a shard 0).
+      //
+      // It used to filter the scan down to the intersection, falling back to the full
+      // range only when that intersection was EMPTY. On 2026-08-27 the index was
+      // truncated to a single date by the writer bug fixed in server.js: a range
+      // including today then intersected to exactly ["today"] — non-empty, so the
+      // fallback never fired — and the report scanned one day and confidently showed
+      // 1 ticket while 1,657 intact entries sat unread. Ranges ENDING yesterday worked
+      // fine, which made it look like data appearing and disappearing at random.
+      //
+      // The cost of dropping the filter is one shard-0 read per empty day. That is a
+      // poor trade to defend: in production tickets arrive daily, so the index lists
+      // nearly every date in the range and the filter saves almost nothing — it only
+      // pays off on ranges full of empty days, while risking silent data hiding always.
+      return dates;
+    }).catch(function () {
+      return dates;
+    }).then(function (toFetch) {
+      return fetchBuckets(toFetch, rangeKey);
+    }).then(done, function (err) {
+      showError('Failed to load data: ' + (err && err.message ? err.message : String(err)));
+      done();
+    });
+  }
+
+  // Walk each day's shards until one is absent, reading them one at a time.
+  function fetchBuckets(dates, rangeKey) {
+    if (dates.length === 0) {
+      // Nothing to scan: this range genuinely holds no data.
+      rangeStore[rangeKey] = { entries: [], complete: true };
+      if (activeRange === rangeKey) renderActiveRange();
+      return Promise.resolve();
+    }
+
+    // triage_cur_{date} is never consulted — a throttled or stale read of it silently
+    // truncated a day to a prefix of its shards.
+    var incomplete = false;
+
+    // Shards are read one at a time; concurrent client.db.get calls get throttled by
+    // the FDK bridge and reject, which is indistinguishable from a real miss.
+    // Walks until a shard is ABSENT. Shards are size-bounded now (the server appends
+    // until the platform's 40KB cap throws, then advances), so a shard holding fewer
+    // entries than its neighbours is perfectly normal and no longer means "last".
+    // The old "stop at a short shard" rule depended on a SHARD_MAX constant duplicated
+    // in two files; when that drifted it silently truncated a day.
+    // Set the moment ANY read in this scan announces itself as rate limited. Throttling
+    // is bursty, so one confirmed 429 makes every ambiguous 404 in the same scan suspect.
+    var sawThrottle = false;
+    var MAX_SHARD_PROBE = 30;
+    function readDateSequential(date, knownPopulated) {
+      var out = [];
+      function step(s) {
+        if (s >= MAX_SHARD_PROBE) { incomplete = true; return Promise.resolve(out); }
+        return dbGetRetry('triage_d_' + date + '_' + s, 4).then(function (bucket) {
+          // A rate-limited read RESOLVES with an error payload rather than rejecting.
+          // Treating a non-bucket value as "no entries" made a throttled read look like
+          // the end of the day's data and silently truncated the range.
+          if (bucket != null && !looksLikeBucket(bucket)) {
+            // Almost always a resolved 429 payload. Record it as confirmed throttling so
+            // ambiguous 404s later in this same scan are treated as suspect too.
+            if (isErrorPayload(bucket)) sawThrottle = true;
+            incomplete = true;
+            return out;
+          }
+          if (!looksLikeBucket(bucket)) return out;      // absent -> day ends
+          out = out.concat(bucket.entries);
+          if (!bucket.entries.length) return out;        // emptied by a wipe -> day ends
+          return step(s + 1);
+        }).catch(function (err) {
+          // Absent and throttled are INDISTINGUISHABLE here — both arrive as a rejected
+          // 404 (see dbGetRetry). Probing one shard past the last populated one is how a
+          // day ENDS, so the old `s > 0` rule marked every healthy multi-shard day as
+          // incomplete. Once 1.6.2 surfaced that flag, the "partial results" warning fired
+          // on every successful load while showing the complete dataset — a warning that
+          // always cries wolf is worse than none, because it teaches you to ignore the
+          // one time it is real.
+          //
+          // So flag only what can be EVIDENCED:
+          //   - a read that announced itself as rate limited (resolved 429 payload, which
+          //     dbGetRetry rethrows with the platform's wording), anywhere in this scan;
+          //   - a failed shard 0 on a date triage_days promised us — that date provably
+          //     HAS a shard 0, so its absence is a lie.
+          // A bare 404 deeper in a day is taken at face value: the day ended.
+          if (looksThrottledError(err)) sawThrottle = true;
+          if (sawThrottle || (s === 0 && knownPopulated)) incomplete = true;
+          return out;
+        });
+      }
+      return step(0);
+    }
+
+    // Days are read in small batches. Reading all 30 at once defeated the whole point
+    // of stepping shards sequentially — it put 30 concurrent chains on the bridge and
+    // was the main trigger for the throttled reads above.
+    var DAY_BATCH = 4;
+    var collected = [];
+    function batch(i) {
+      if (i >= dates.length) return Promise.resolve(collected);
+      return Promise.all(dates.slice(i, i + DAY_BATCH).map(function (d) {
+        return readDateSequential(d, knownPopulatedDates.indexOf(d) !== -1);
+      })).then(function (res) {
+        collected = collected.concat([].concat.apply([], res));
+        return batch(i + DAY_BATCH);
+      });
+    }
+
+    return batch(0).then(function (entries) {
+      if (!incomplete) clearError();
+      var held = rangeStore[rangeKey];
+      // Within this one range, a truncated read must not replace a larger result we
+      // already hold. Ranges never compare against each other — separate slots.
+      var worseThanHeld = held && incomplete && held.entries.length > entries.length;
+      if (!worseThanHeld) {
+        rangeStore[rangeKey] = { entries: entries, complete: !incomplete };
+      }
+      if (activeRange === rangeKey) renderActiveRange();
+    });
+  }
+
+  // ── filtering & sorting ───────────────────────────────────────────────
+  // Entries written before v1.6.0 carry no provider/model — they are grouped under a
+  // single "unknown" bucket rather than hidden, so a range spanning the upgrade still
+  // adds up to the same total.
+  function entryProvider(e) { return e.provider || 'unknown'; }
+  function entryModel(e) { return e.model || 'unknown'; }
+
+  // Filter value is either `provider:<id>` (every model from that vendor) or
+  // `model:<id>` (one specific model). Deflected entries made no AI call at all, so they
+  // belong to no provider and drop out of any narrowing — otherwise a per-provider cost
+  // total would silently absorb $0 rows that had nothing to do with that provider.
+  function matchesModelFilter(e) {
+    var sep = modelFilter.indexOf(':');
+    var kind = modelFilter.slice(0, sep);
+    var want = modelFilter.slice(sep + 1);
+    if (e.deflected) return false;
+    return kind === 'provider' ? entryProvider(e) === want : entryModel(e) === want;
+  }
+
+  // Rebuilt from whatever is actually loaded, so the list never offers a provider the
+  // current range holds nothing for. The selection is preserved across reloads where it
+  // still applies, and silently reset to "All" where it does not — a filter pointing at
+  // an absent model would render an empty table that looks exactly like data loss, which
+  // is the mistake this report has already made twice.
+  function renderModelOptions() {
+    var sel = document.getElementById('model-filter');
+    if (!sel) return;
+    var providers = {}, models = {};
+    for (var i = 0; i < allEntries.length; i++) {
+      var e = allEntries[i];
+      if (e.deflected) continue;
+      providers[entryProvider(e)] = (providers[entryProvider(e)] || 0) + 1;
+      models[entryModel(e)] = (models[entryModel(e)] || 0) + 1;
+    }
+    var providerKeys = Object.keys(providers).sort();
+    var modelKeys = Object.keys(models).sort();
+
+    var html = '<option value="">All models</option>';
+    // Only worth offering the vendor roll-up when more than one vendor is present.
+    if (providerKeys.length > 1) {
+      html += '<optgroup label="By provider">';
+      for (var p = 0; p < providerKeys.length; p++) {
+        html += '<option value="provider:' + escHtml(providerKeys[p]) + '">' +
+          escHtml(providerKeys[p]) + ' (' + providers[providerKeys[p]] + ')</option>';
+      }
+      html += '</optgroup>';
+    }
+    html += '<optgroup label="By model">';
+    for (var m = 0; m < modelKeys.length; m++) {
+      html += '<option value="model:' + escHtml(modelKeys[m]) + '">' +
+        escHtml(modelKeys[m]) + ' (' + models[modelKeys[m]] + ')</option>';
+    }
+    html += '</optgroup>';
+    sel.innerHTML = html;
+
+    // Restore the selection only if it still exists in this range.
+    var stillValid = modelFilter && Array.prototype.some.call(sel.options, function (o) {
+      return o.value === modelFilter;
+    });
+    if (!stillValid) modelFilter = '';
+    sel.value = modelFilter;
+    sel.classList.toggle('active', !!modelFilter);
+  }
+
+  function applyFilters() {
+    var search = searchVal.replace(/\D/g, ''); // INC# is numeric
+    filtered = allEntries.filter(function (e) {
+      if (search && String(e.display_id || e.ticket_id || '').indexOf(search) === -1) return false;
+      if (truncOnly && !e.token_limit_hit) return false;
+      if (modelFilter && !matchesModelFilter(e)) return false;
+      if (hideDeflected && e.deflected) return false;
+      return true;
+    });
+    sortFiltered();
+    renderRows(filtered);
+    updateStats(filtered);
+  }
+
+  function sortFiltered() {
+    filtered.sort(function (a, b) {
+      var av = a[sortCol], bv = b[sortCol];
+      // Missing values coerce to the neutral value OF THE SAME TYPE as the other side.
+      // Defaulting a missing string column (model) to 0 made every comparison against a
+      // real model name return "equal", so pre-v1.6.0 rows sorted arbitrarily.
+      if (av == null) av = (typeof bv === 'string') ? '' : 0;
+      if (bv == null) bv = (typeof av === 'string') ? '' : 0;
+      if (av < bv) return sortDir === 'asc' ? -1 : 1;
+      if (av > bv) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  // ── rendering ─────────────────────────────────────────────────────────
+  function fmtCost(usd) {
+    if (usd == null || isNaN(usd)) return '—';
+    if (usd < 0.0001) return '<$0.0001';
+    return '$' + usd.toFixed(4);
+  }
+  function fmtCostPerK(usd) {
+    if (usd == null || isNaN(usd)) return '—';
+    var perK = usd * 1000;
+    return '$' + perK.toFixed(2);
+  }
+  // Provider/model badge for one row. Deflected tickets made no AI call at all, and
+  // entries written before v1.6.0 predate provider tracking — both render as an em dash
+  // rather than guessing which model was responsible.
+  function modelBadge(e) {
+    if (e.deflected) return '<span style="color:var(--text-muted)">—</span>';
+    if (!e.model) return '<span class="model-badge is-unknown" title="Logged before v1.6.0, when the provider was not recorded">unknown</span>';
+    var cls = e.provider === 'openai' ? 'is-openai' : (e.provider === 'anthropic' ? 'is-anthropic' : 'is-unknown');
+    return '<span class="model-badge ' + cls + '" title="' + escHtml(e.provider || 'unknown provider') + '">' + escHtml(e.model) + '</span>';
+  }
+  function fmtTokens(inp, out) {
+    if (inp == null && out == null) return '—';
+    return (inp || 0).toLocaleString() + ' / ' + (out || 0).toLocaleString();
+  }
+  // Rendered in UTC so displayed times agree with the UTC-keyed buckets they live in.
+  // With local rendering a ticket triaged at 21:13 EDT showed as 08/21 while sitting in
+  // the 08-22 bucket, which made every range tab look wrong on an evening run.
+  function fmtDate(ts) {
+    if (!ts) return '—';
+    var d = new Date(ts);
+    var mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    var dd = String(d.getUTCDate()).padStart(2, '0');
+    var hh = String(d.getUTCHours()).padStart(2, '0');
+    var mi = String(d.getUTCMinutes()).padStart(2, '0');
+    return mm + '/' + dd + ' ' + hh + ':' + mi;
+  }
+  function fmtDur(ms) {
+    if (ms == null) return '—';
+    return (ms / 1000).toFixed(1) + 's';
+  }
+  function escHtml(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function renderRows(rows) {
+    var tbody = document.getElementById('table-body');
+    if (rows.length === 0) {
+      // "Nothing here" and "couldn't finish reading" are NOT the same claim, and the
+      // difference is the whole ballgame: Data Storage allows ~50 reads/minute and a
+      // throttled read RESOLVES looking exactly like an empty shard. Asserting absence
+      // on an incomplete scan is how a transient throttle reads as "the bulk run was
+      // wiped" — which it did, on 2026-08-27, costing half an hour and nearly a
+      // destructive "recovery". The reader has always tracked this (rangeStore's
+      // `complete`); it just never reached the screen.
+      if (rangeIncomplete() || !dayIndexReadOk) {
+        tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">' +
+          '<div class="empty-state-icon">⚠</div>' +
+          '<div class="empty-heading">Couldn\'t finish reading storage — this is NOT "no data"</div>' +
+          '<div>Some reads were throttled or failed, so entries may exist that could not be loaded. ' +
+          'Data Storage allows ~50 reads/minute and every range switch spends from that budget.</div>' +
+          '<div style="margin-top:8px"><b>Wait about a minute, then reload — do not Consolidate or Wipe.</b></div>' +
+          '</div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">' +
+        '<div class="empty-state-icon">— — —</div>' +
+        '<div class="empty-heading">No triage entries found</div>' +
+        '<div>Tickets are logged here after AI-Triage processes them.</div>' +
+        '</div></td></tr>';
+      return;
+    }
+    var html = '';
+    // Partial results are more dangerous than none: totals, averages and the cost
+    // figures below are all computed from whatever loaded, so an unflagged partial scan
+    // silently understates spend. Say so in the table itself rather than only when the
+    // result happens to be empty.
+    if (rangeIncomplete()) {
+      html += '<tr><td colspan="9" style="background:var(--warn-dim);color:var(--warn);' +
+        'font-weight:600;padding:8px 12px;border-bottom:1px solid var(--border)">' +
+        '⚠ Partial results — some storage reads were throttled, so entries are missing and the ' +
+        'totals below understate the real figures. Wait about a minute and reload.' +
+        '</td></tr>';
+    }
+    for (var i = 0; i < rows.length; i++) {
+      var e = rows[i];
+      var incNum = String(parseInt(e.display_id || e.ticket_id || 0, 10) || 0);
+      var incLink = domain
+        ? '<a class="inc-link" href="https://' + escHtml(domain) + '/a/tickets/' + incNum + '" target="_blank" rel="noopener">INC-' + incNum + '</a>'
+        : '<span class="inc-link">INC-' + incNum + '</span>';
+      var truncBadge = e.token_limit_hit
+        ? ' <span class="trunc-badge" title="Output token limit reached — triage note may be truncated">⚠ TRUNC</span>'
+        : '';
+      var deflectBadge = e.deflected
+        ? ' <span class="deflect-badge" title="Auto-deflected: ' + escHtml(e.deflect_type || 'recurring') + ' — prewritten note posted, no AI call">DEFLECTED</span>'
+        : '';
+      html += '<tr>';
+      html += '<td>' + incLink + '</td>';
+      html += '<td class="subject-cell"><span class="subject-text" title="' + escHtml(e.subject) + '">' + escHtml(e.subject) + '</span></td>';
+      html += '<td class="mono">' + fmtDate(e.ts) + '</td>';
+      html += '<td>' + modelBadge(e) + '</td>';
+      html += '<td><div class="tokens-cell">' + (e.deflected ? '' : '<span class="mono">' + fmtTokens(e.input_tokens, e.output_tokens) + '</span>') + truncBadge + deflectBadge + '</div></td>';
+      html += '<td class="mono" style="text-align:center">' + (e.deflected ? '—' : (e.web_searches != null ? e.web_searches : '—')) + '</td>';
+      html += '<td class="mono cost-cell">' + (e.deflected ? '<span style="color:var(--text-muted)">$0</span>' : fmtCost(e.cost_usd)) + '</td>';
+      html += '<td class="mono cost-per-k">' + (e.deflected ? '—' : fmtCostPerK(e.cost_usd)) + '</td>';
+      html += '<td class="mono dur-cell">' + fmtDur(e.duration_ms) + '</td>';
+      html += '</tr>';
+    }
+    tbody.innerHTML = html;
+  }
+
+  function updateStats(rows) {
+    var count = rows.length;
+    var totalCost = 0, hasCost = false;
+    var truncCount = 0, deflectCount = 0, costedCount = 0;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].deflected) { deflectCount++; continue; }
+      if (rows[i].cost_usd != null) { totalCost += rows[i].cost_usd; hasCost = true; costedCount++; }
+      if (rows[i].token_limit_hit) truncCount++;
+    }
+    var aiCount = count - deflectCount;
+    // Divide by entries that actually carried a cost, not every non-deflected row.
+    // An entry with cost_usd == null (unknown model pricing, or a partial write) adds
+    // nothing to the total, so counting it in the denominator understates both the
+    // average and the cost/1k projection — the two numbers this report exists for.
+    var avgCost = (hasCost && costedCount > 0) ? totalCost / costedCount : null;
+    var uncosted = aiCount - costedCount;
+    var perK    = avgCost != null ? avgCost * 1000 : null;
+    var range   = dateRange();
+
+    document.getElementById('stat-count').textContent = count.toLocaleString();
+    // Name the actual date rather than saying "today" — ranges are UTC days, so on a
+    // late-evening run "today" is not the day the operator thinks it is.
+    document.getElementById('stat-date-range').textContent =
+      range.from === range.to ? range.from + ' (UTC)' : range.from + ' → ' + range.to + ' (UTC)';
+    document.getElementById('stat-total-cost').textContent = hasCost ? '$' + totalCost.toFixed(4) : '—';
+    var costNote = deflectCount > 0 ? 'AI only (' + deflectCount + ' deflected excluded)' : 'AI triage spend';
+    if (uncosted > 0) costNote += ' · ' + uncosted + ' with no cost data';
+    document.getElementById('stat-cost-note').textContent = costNote;
+    document.getElementById('stat-avg-cost').textContent = avgCost != null ? '$' + avgCost.toFixed(5) : '—';
+    document.getElementById('stat-per-k').textContent = perK != null ? '$' + perK.toFixed(2) : '—';
+
+    var truncNote = truncCount > 0
+      ? truncCount + ' note' + (truncCount === 1 ? '' : 's') + ' may be truncated'
+      : 'no truncation detected';
+    var truncEl = document.getElementById('stat-trunc-note');
+    truncEl.textContent = truncNote;
+    truncEl.className = 'stat-sub' + (truncCount > 0 ? ' stat-warn' : '');
+  }
+
+  // ── column sort ───────────────────────────────────────────────────────
+  function updateSortHeaders() {
+    document.querySelectorAll('th[data-col]').forEach(function (th) {
+      var col = th.getAttribute('data-col');
+      th.classList.remove('sort-asc', 'sort-desc');
+      var arrow = th.querySelector('.sort-arrow');
+      if (col === sortCol) {
+        th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+        if (arrow) arrow.textContent = sortDir === 'asc' ? '↑' : '↓';
+      } else {
+        if (arrow) arrow.textContent = '↕';
+      }
+    });
+  }
+
+  document.querySelectorAll('th.sortable').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var col = th.getAttribute('data-col');
+      if (sortCol === col) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortCol = col;
+        sortDir = 'desc';
+      }
+      updateSortHeaders();
+      sortFiltered();
+      renderRows(filtered);
+    });
+  });
+
+  // ── range tabs ────────────────────────────────────────────────────────
+  document.querySelectorAll('.range-tab').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.range-tab').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      rangeMode = btn.getAttribute('data-range');
+      var customEl = document.getElementById('custom-range');
+      if (rangeMode === 'custom') {
+        customEl.style.display = 'flex';
+        // default custom to last 7 days if blank
+        var fromEl = document.getElementById('date-from');
+        var toEl   = document.getElementById('date-to');
+        if (!fromEl.value) fromEl.value = daysAgo(6);
+        if (!toEl.value)   toEl.value   = today();
+        // Setting .value from JS fires no change event, so without this the tab showed
+        // the PREVIOUS range's rows under a "Custom" label until a date was edited.
+        if (client) loadData();
+      } else {
+        customEl.style.display = 'none';
+        if (client) loadData();
+      }
+    });
+  });
+  document.getElementById('model-filter').addEventListener('change', function () {
+    modelFilter = this.value;
+    this.classList.toggle('active', !!modelFilter);
+    applyFilters();
+  });
+  document.getElementById('date-from').addEventListener('change', function () { if (client) loadData(); });
+  document.getElementById('date-to').addEventListener('change', function () { if (client) loadData(); });
+
+  // ── search ────────────────────────────────────────────────────────────
+  // Debounced: applyFilters re-filters, re-sorts and rebuilds the entire tbody, which
+  // is well over a megabyte of HTML at 2,000 rows. Running that per keystroke stutters.
+  var searchDebounce;
+  document.getElementById('search-input').addEventListener('input', function () {
+    searchVal = this.value;
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(applyFilters, 200);
+  });
+
+  // ── truncation filter ─────────────────────────────────────────────────
+  document.getElementById('trunc-filter').addEventListener('click', function () {
+    truncOnly = !truncOnly;
+    this.classList.toggle('active', truncOnly);
+    this.setAttribute('aria-pressed', String(truncOnly));
+    applyFilters();
+  });
+
+  // ── deflection filter ─────────────────────────────────────────────────
+  document.getElementById('deflect-filter').addEventListener('click', function () {
+    hideDeflected = !hideDeflected;
+    this.classList.toggle('deflect-active', hideDeflected);
+    this.setAttribute('aria-pressed', String(hideDeflected));
+    applyFilters();
+  });
+
+  // ── admin mode (sandbox utility) ──────────────────────────────────────
+  // Enable via browser console (run once in the iframe's JS context, then reload):
+  //   localStorage.setItem('lf_admin','1')
+  // Disable: localStorage.removeItem('lf_admin')
+  try {
+    if (localStorage.getItem('lf_admin') === '1') {
+      document.getElementById('consolidate-btn').style.display = '';
+      document.getElementById('wipe-today-btn').style.display = '';
+      document.getElementById('wipe-btn').style.display = '';
+      document.getElementById('seed-btn').style.display = '';
+      document.getElementById('inspect-btn').style.display = '';
+    }
+  } catch (e) { /* localStorage blocked in some sandbox contexts */ }
+
+  // Consolidate: RECOVERY tool. Exhaustively scans every shard slot, de-duplicates,
+  // and rewrites everything onto one day. Use it to recover entries stranded behind a
+  // short shard. Entry `ts` values are restamped, so original per-ticket times are not
+  // preserved — order is. Sandbox use only.
+  //
+  // Targets today by default rather than a hardcoded date, which would eventually
+  // gather everything onto a day the report's 30-day tab can no longer reach.
+  function consolidateTarget() { return today(); }
+  document.getElementById('consolidate-btn').addEventListener('click', function () {
+    if (!client) return;
+    var btn = this;
+    var LABEL = '⇤ Consolidate to one day';
+    var CONSOLIDATE_DATE = consolidateTarget();
+    btn.disabled = true;
+    btn.textContent = '⇤ Reading…';
+
+    function reset() { btn.disabled = false; btn.textContent = LABEL; }
+
+    // Deliberately does NOT use the report's "walk until a shard comes back short"
+    // rule — that rule is exactly what hides stranded shards. A day whose shard 0 holds
+    // few entries can still have full shards behind it if something rewrote the day
+    // without clearing the slots it previously used. This scans every slot regardless.
+    var SCAN_SHARDS   = 20;   // matches the server's practical ceiling
+    var SCAN_DAYS     = 45;
+    var SCAN_PARALLEL = 4;    // reads are paced globally; this only groups progress
+
+    reportStart('Consolidate to one day — recovery');
+    reportLine('Exhaustively scanning ' + SCAN_DAYS + ' days x ' + SCAN_SHARDS + ' slots (' +
+               (SCAN_DAYS * SCAN_SHARDS) + ' reads) onto ' + CONSOLIDATE_DATE + '.');
+    reportLine('This tool does NOT stop at a short shard — that is the point of it, and it is');
+    reportLine('why it is expensive. Paced at ~' + RATE_PER_MIN + ' req/min, so ETA ~' +
+               pacedEta(SCAN_DAYS * SCAN_SHARDS) + '. Leave the tab open.');
+    reportLine('');
+
+    function scanDayExhaustive(date) {
+      var out = [];
+      function step(s) {
+        if (s >= SCAN_SHARDS) return Promise.resolve(out);
+        return dbGetRetry('triage_d_' + date + '_' + s, 3).then(function (b) {
+          // A resolved 429 is not an empty slot — silently concatenating nothing here
+          // is how a "recovery" pass could quietly drop the data it was recovering.
+          var got = (b && Array.isArray(b.entries)) ? b.entries : [];
+          out = out.concat(got);
+          return step(s + 1);          // never stops early
+        }).catch(function () {
+          return step(s + 1);          // absent slot, keep going
+        });
+      }
+      return step(0);
+    }
+
+    // Work through the window a few days at a time so the bridge isn't flooded.
+    function scanAll(dates) {
+      var collected = [];
+      function batch(i) {
+        if (i >= dates.length) return Promise.resolve(collected);
+        btn.textContent = '⇤ Scanning ' + Math.min(i + SCAN_PARALLEL, dates.length) +
+                          '/' + dates.length + ' days…';
+        return Promise.all(dates.slice(i, i + SCAN_PARALLEL).map(scanDayExhaustive))
+          .then(function (res) {
+            collected = collected.concat([].concat.apply([], res));
+            return batch(i + SCAN_PARALLEL);
+          });
+      }
+      return batch(0);
+    }
+
+    var scanDates = [];
+    for (var dOff = 0; dOff < SCAN_DAYS; dOff++) scanDates.push(daysAgo(dOff));
+
+    Promise.resolve().then(function () {
+      return scanAll(scanDates);
+    }).then(function (found) {
+      // Orphaned shards mean the same entry can turn up more than once.
+      var seen = {};
+      var all = [];
+      found.forEach(function (e) {
+        var id = e && (e.ticket_id != null ? e.ticket_id : e.display_id);
+        if (id == null || seen[id]) return;
+        seen[id] = true;
+        all.push(e);
+      });
+
+      if (!all.length) { reset(); showError('Consolidate: no entries found in the last ' + SCAN_DAYS + ' days.'); return null; }
+
+      return Promise.resolve().then(function () {
+        btn.textContent = '⇤ Writing (' + all.length + ')…';
+        all.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+
+        // Restamp onto the target day, one minute apart from 08:00, so ordering is
+        // preserved and the times stay inside the day.
+        var base = new Date(CONSOLIDATE_DATE + 'T08:00:00').getTime();
+        all.forEach(function (e, i) { e.ts = base + i * 60000; });
+
+        // Thunks, not promises — client.db.set fires the moment it is called, so the
+        // batching below only staggers the work if the calls are deferred.
+        var writes = [];
+        function put(key, val) {
+          writes.push(function () { return pacedSet(key, val); });
+        }
+
+        var shardCount = 0;
+        for (var i = 0; i < all.length; i += SHARD_MAX) {
+          put('triage_d_' + CONSOLIDATE_DATE + '_' + shardCount, { entries: all.slice(i, i + SHARD_MAX) });
+          shardCount++;
+        }
+        // Clear any slot above the ones just written, so a longer previous run of this
+        // day can't leave orphans behind the new final shard.
+        for (var z = shardCount; z < SCAN_SHARDS; z++) {
+          put('triage_d_' + CONSOLIDATE_DATE + '_' + z, { entries: [] });
+        }
+        put('triage_cur_' + CONSOLIDATE_DATE, { shard: Math.max(0, shardCount - 1) });
+
+        // Blank every OTHER day across every shard slot. Emptying only shard 0 is what
+        // created the orphans this operation had to recover from — a short shard 0
+        // hides populated shards behind it rather than deleting them.
+        scanDates.forEach(function (d) {
+          if (d === CONSOLIDATE_DATE) return;
+          for (var s = 0; s < SCAN_SHARDS; s++) {
+            put('triage_d_' + d + '_' + s, { entries: [] });
+          }
+          put('triage_cur_' + d, { shard: 0 });
+        });
+
+        put('triage_days', [CONSOLIDATE_DATE]);
+
+        // Writes go out in small batches for the same reason reads do.
+        function flush(i) {
+          if (i >= writes.length) return true;
+          btn.textContent = '⇤ Writing ' + Math.min(i + 8, writes.length) + '/' + writes.length + '…';
+          return Promise.all(writes.slice(i, i + 8).map(function (fn) { return fn(); }))
+            .then(function () { return flush(i + 8); });
+        }
+        return flush(0);
+      });
+    }).then(function (didWrite) {
+      if (!didWrite) return;
+      btn.textContent = '✓ Done — reloading…';
+      try {
+        Object.keys(localStorage).forEach(function (k) {
+          if (k.indexOf(CACHE_PREFIX) === 0) localStorage.removeItem(k);
+        });
+      } catch (e) {}
+      allEntries = [];
+      rangeStore = {};
+      setTimeout(function () { reset(); loadData(); }, 1000);
+    }).catch(function (err) {
+      reset();
+      showError('Consolidate failed: ' + (err && err.message ? err.message : String(err)));
+    });
+  });
+
+  // Inspect: report exactly what is in storage right now. READ-ONLY — issues no set,
+  // no delete, and touches no cache. Exists so questions like "did the wipe actually
+  // clear anything?" are answered by observation rather than inference.
+  document.getElementById('inspect-btn').addEventListener('click', function () {
+    if (!client) return;
+    var btn = this;
+    var LABEL = '⌕ Inspect storage';
+    btn.disabled = true;
+
+    var MAX_SHARDS = 20;
+
+    reportStart('Storage inspection — read-only');
+
+    var occupied = [];
+    var failures = [];
+    var cursors = [];
+    var rateLimited = 0;   // reads that RESOLVED with a 429 payload instead of failing
+    var reads = 0;
+
+    // Walks one day's shards until one comes back absent or empty, instead of probing
+    // all 20 slots blind. Blind probing cost 20 reads per day against a ~50/min budget,
+    // which is what made the previous scan report "0 populated" for a store that was
+    // not empty at all.
+    function walkDay(dt) {
+      function step(s) {
+        if (s >= MAX_SHARDS) return Promise.resolve();
+        reads++;
+        btn.textContent = '⌕ ' + reads + ' reads…';
+        return pacedGet('triage_d_' + dt + '_' + s).then(function (v) {
+          if (isErrorPayload(v)) { rateLimited++; return; }
+          if (!v || !Array.isArray(v.entries)) return;           // absent -> day ends
+          if (!v.entries.length) return;                          // empty  -> day ends
+          occupied.push({ key: 'triage_d_' + dt + '_' + s, count: v.entries.length });
+          return step(s + 1);
+        }).catch(function () {
+          failures.push('triage_d_' + dt + '_' + s);
+        });
+      }
+      return step(0);
+    }
+
+    function walkAll(dts, i) {
+      if (i >= dts.length) return Promise.resolve();
+      return walkDay(dts[i]).then(function () { return walkAll(dts, i + 1); });
+    }
+
+    var scanDates = [];
+    pacedGet('triage_days').then(function (v) {
+      if (isErrorPayload(v)) {
+        reportLine('triage_days: RATE LIMITED — ' + (v.message || '429') +
+                   '  (this read resolved with an error payload rather than failing)');
+        return [];
+      }
+      var arr = toDateList(v);
+      reportLine('triage_days: ' + (arr.length ? arr.length + ' dates -> ' + arr.join(', ') : '(empty)'));
+      return arr;
+    }).catch(function (e) {
+      reportLine('triage_days: READ FAILED (' + (e && e.message ? e.message : 'absent or throttled') + ')');
+      return [];
+    }).then(function (idx) {
+      // Scan what the index names, plus the last 7 days in case the index is stale or
+      // was cleared. Anything beyond that is Consolidate's job, not a routine scan.
+      scanDates = idx.slice();
+      for (var d = 0; d < 7; d++) {
+        var dt = daysAgo(d);
+        if (scanDates.indexOf(dt) === -1) scanDates.push(dt);
+      }
+      scanDates.sort().reverse();
+      reportLine('Scanning ' + scanDates.length + ' date(s), walking shards until one ends the day.');
+      reportLine('Paced at ~' + RATE_PER_MIN + " req/min (the platform's limit is ~50) — ETA ~" +
+                 pacedEta(scanDates.length * 2) + '.');
+      reportLine('');
+      return walkAll(scanDates, 0);
+    }).then(function () {
+      return (function curStep(i) {
+        if (i >= scanDates.length) return Promise.resolve();
+        return pacedGet('triage_cur_' + scanDates[i]).then(function (v) {
+          if (!isErrorPayload(v) && v && typeof v.shard === 'number') {
+            cursors.push(scanDates[i] + ' -> shard ' + v.shard);
+          }
+        }).catch(function () {}).then(function () { return curStep(i + 1); });
+      })(0);
+    }).then(function () {
+      var total = occupied.reduce(function (n, o) { return n + o.count; }, 0);
+      reportLine('');
+      reportLine('POPULATED SHARDS: ' + occupied.length + ' slots, ' + total + ' entries total');
+      if (occupied.length) {
+        var f = formatOccupied(occupied);
+        reportLine('  across ' + f.dates + ' date(s):');
+        f.lines.forEach(reportLine);
+      } else {
+        reportLine('  (none — Data Storage holds no triage entries in this window)');
+      }
+      reportLine('');
+      reportLine('CURSORS: ' + (cursors.length ? '' : '(none)'));
+      cursors.forEach(function (c) { reportLine('  ' + c); });
+      reportLine('');
+      reportLine('LOCAL CACHE (localStorage, per-browser — not Data Storage):');
+      var cs = cacheSummary();
+      if (cs.length) { cs.forEach(reportLine); }
+      else { reportLine('  (no cached ranges)'); }
+      reportLine('');
+      if (rateLimited) {
+        reportLine('RATE LIMITED READS: ' + rateLimited + ' — these resolved with a 429 payload,');
+        reportLine('  so this scan is INCOMPLETE and any "0 entries" above is not trustworthy.');
+        reportLine('  Data Storage allows ~50 requests/minute; wait a minute and re-run.');
+        reportLine('');
+      }
+      reportLine('FAILED READS: ' + failures.length +
+                 (failures.length ? ' (absent keys look identical to throttled ones)' : ''));
+      if (failures.length && failures.length <= 40) failures.forEach(function (k) { reportLine('  ' + k); });
+      else if (failures.length) reportLine('  ' + failures.slice(0, 40).join('\n  ') + '\n  … and ' + (failures.length - 40) + ' more');
+      reportLine('');
+      reportLine('Total reads issued: ' + reads + ' (paced at ~' + RATE_PER_MIN + '/min)');
+      reportLine('');
+      reportLine('Interpretation:');
+      reportLine('  ANY rate-limited reads above -> this whole report is unreliable, re-run');
+      reportLine('  entries here but tabs empty   -> reader problem');
+      reportLine('  no entries but tabs populated -> stale LOCAL CACHE above');
+      reportLine('  entries a wipe claimed to clear -> clear is silently failing');
+      btn.disabled = false;
+      btn.textContent = LABEL;
+    }).catch(function (err) {
+      reportLine('');
+      reportLine('INSPECTION FAILED: ' + (err && err.message ? err.message : String(err)));
+      btn.disabled = false;
+      btn.textContent = LABEL;
+    });
+  });
+
+  // Wipe today: clear only today's shards and remove today from triage_days, leaving
+  // every other day intact. Use before a demo to remove test-run entries without
+  // disturbing historical data.
+  document.getElementById('wipe-today-btn').addEventListener('click', function () {
+    if (!client) return;
+    var btn = this;
+    var LABEL = '⨯ Wipe today\'s logs';
+    var dt = today();
+
+    if (btn.getAttribute('data-armed') !== '1') {
+      btn.setAttribute('data-armed', '1');
+      btn.textContent = '⨯ Click again to confirm (' + dt + ')';
+      setTimeout(function () {
+        if (btn.getAttribute('data-armed') === '1') {
+          btn.removeAttribute('data-armed');
+          btn.textContent = LABEL;
+        }
+      }, 5000);
+      return;
+    }
+    btn.removeAttribute('data-armed');
+    btn.disabled = true;
+
+    var WIPE_SHARDS = 20;
+    var reads = 0;
+    var rateLimited = 0;
+
+    // Walk today's shards, collect occupied ones.
+    function scanToday() {
+      var occupied = [];
+      function step(s) {
+        if (s >= WIPE_SHARDS) return Promise.resolve(occupied);
+        reads++;
+        btn.textContent = '⨯ scan ' + reads + '…';
+        return pacedGet('triage_d_' + dt + '_' + s).then(function (b) {
+          if (isErrorPayload(b)) { rateLimited++; return Promise.resolve(occupied); }
+          if (!b || !Array.isArray(b.entries) || !b.entries.length) return Promise.resolve(occupied);
+          occupied.push({ key: 'triage_d_' + dt + '_' + s, count: b.entries.length });
+          return step(s + 1);
+        }).catch(function () { return Promise.resolve(occupied); });
+      }
+      return step(0);
+    }
+
+    function clearKey(key, attempts) {
+      var empty = key.indexOf('triage_cur_') === 0 ? { shard: 0 } : { entries: [] };
+      return pacedSet(key, empty).catch(function () {
+        if (attempts <= 1) return false;
+        return new Promise(function (res) { setTimeout(res, 250); })
+          .then(function () { return clearKey(key, attempts - 1); });
+      }).then(function (r) { return r !== false; });
+    }
+
+    function clearAll(list) {
+      var failed = [];
+      function step(i) {
+        if (i >= list.length) return Promise.resolve(failed);
+        btn.textContent = '⨯ Clearing ' + (i + 1) + '/' + list.length + '…';
+        return clearKey(list[i].key, 5).then(function (ok) {
+          if (!ok) failed.push(list[i].key);
+          return step(i + 1);
+        });
+      }
+      return step(0);
+    }
+
+    reportStart('Wipe today\'s logs (' + dt + ')');
+
+    scanToday().then(function (occupied) {
+      var total = occupied.reduce(function (n, o) { return n + o.count; }, 0);
+      reportLine('Found ' + occupied.length + ' shard(s) with ' + total + ' entries for ' + dt +
+                 (rateLimited ? '  [' + rateLimited + ' RATE LIMITED]' : ''));
+      if (!occupied.length) {
+        reportLine('Nothing to clear for today.');
+        btn.textContent = LABEL;
+        btn.disabled = false;
+        return;
+      }
+      return clearAll(occupied).then(function (failed) {
+        reportLine('Cleared ' + (occupied.length - failed.length) + '/' + occupied.length + ' shard(s).' +
+                   (failed.length ? ' FAILED on ' + failed.length + ': ' + failed.join(', ') : ''));
+        // Remove today from triage_days without touching other dates.
+        btn.textContent = '⨯ Updating index…';
+        return dbGetRetry('triage_days', 3).then(function (resp) {
+          var existing = toDateList(resp).filter(function (d) { return d !== dt; });
+          return pacedSet('triage_days', existing);
+        }).catch(function () {
+          reportLine('(warn: could not update triage_days — Inspect will show stale entry)');
+        }).then(function () {
+          return clearKey('triage_cur_' + dt, 3);
+        }).then(function () {
+          reportLine('triage_days updated; triage_cur_' + dt + ' cleared.');
+          if (rateLimited) {
+            reportLine('');
+            reportLine('RESULT: UNRELIABLE — ' + rateLimited + ' reads were rate limited.');
+            reportLine('Wait a minute and run again to catch anything missed.');
+            showError('Wipe today hit rate limit — may be incomplete. See report above.');
+            btn.textContent = '⨯ rate limited — click to retry';
+            btn.disabled = false;
+          } else if (failed.length) {
+            reportLine('');
+            reportLine('RESULT: INCOMPLETE — ' + failed.length + ' shard(s) could not be cleared.');
+            showError('Wipe today incomplete — see report above.');
+            btn.textContent = '⨯ incomplete — click to retry';
+            btn.disabled = false;
+          } else {
+            reportLine('');
+            reportLine('RESULT: cleared ' + total + ' entries for ' + dt + '.');
+            btn.textContent = '✓ Wiped — reloading…';
+            allEntries = [];
+            rangeStore = {};
+            setTimeout(function () {
+              btn.disabled = false;
+              btn.textContent = LABEL;
+              loadData();
+            }, 1000);
+          }
+        });
+      });
+    }).catch(function (err) {
+      reportLine('WIPE TODAY FAILED: ' + (err && err.message ? err.message : String(err)));
+      btn.disabled = false;
+      btn.textContent = LABEL;
+      showError('Wipe today failed: ' + (err && err.message ? err.message : String(err)));
+    });
+  });
+
+  // Wipe: permanently clear every stored triage log entry, leaving storage in the
+  // state a fresh install would have. Clears all shard slots rather than just shard 0,
+  // so nothing is left stranded behind a short shard. Tickets in Freshservice are
+  // untouched — this only removes what this report reads. Sandbox use only.
+  document.getElementById('wipe-btn').addEventListener('click', function () {
+    if (!client) return;
+    var btn = this;
+    var LABEL = '⨯ Wipe all log data';
+
+    // Two-step confirm: the first click arms, the second commits.
+    if (btn.getAttribute('data-armed') !== '1') {
+      btn.setAttribute('data-armed', '1');
+      btn.textContent = '⨯ Click again to confirm';
+      setTimeout(function () {
+        if (btn.getAttribute('data-armed') === '1') {
+          btn.removeAttribute('data-armed');
+          btn.textContent = LABEL;
+        }
+      }, 5000);
+      return;
+    }
+    btn.removeAttribute('data-armed');
+    btn.disabled = true;
+
+    var WIPE_SHARDS = 20;
+    var wipeDates = [];
+
+    // The wipe walks each candidate day's shards until one ends the day, rather than
+    // probing a fixed 60x20 grid. The grid cost ~1,200 reads against a ~50/min budget:
+    // measured 2026-08-22, 1,151 of them came back rate-limited, every one of which
+    // looked like an empty slot — so the wipe "found" nothing, cleared nothing, and
+    // reported success while the data sat untouched. That is the whole bug.
+    var scanFailures = 0;
+    var scanRateLimited = 0;
+    var scanReads = 0;
+    function scanOccupied() {
+      var occupied = [];
+      scanFailures = 0;
+      scanRateLimited = 0;
+
+      function walkDay(dt) {
+        function step(s) {
+          if (s >= WIPE_SHARDS) return Promise.resolve();
+          scanReads++;
+          btn.textContent = '⨯ scan ' + scanReads + '…';
+          return pacedGet('triage_d_' + dt + '_' + s).then(function (b) {
+            if (isErrorPayload(b)) { scanRateLimited++; return; }
+            if (!b || !Array.isArray(b.entries) || !b.entries.length) return;  // day ends
+            occupied.push({ key: 'triage_d_' + dt + '_' + s, count: b.entries.length });
+            return step(s + 1);
+          }).catch(function () { scanFailures++; });
+        }
+        return step(0);
+      }
+
+      return (function next(i) {
+        if (i >= wipeDates.length) return Promise.resolve(occupied);
+        return walkDay(wipeDates[i]).then(function () { return next(i + 1); });
+      })(0);
+    }
+
+    // Writes an empty value rather than calling client.db.delete. Evidence (2026-08-22):
+    // after two wipes that reported success, `triage_days` still listed 30 dates — the
+    // delete resolved without removing the key. An empty value is functionally identical
+    // for every reader here (the shard walk stops at a short shard, and an empty day
+    // index is treated as "no hint"), and set() is demonstrably effective.
+    function emptyValueFor(key) {
+      if (key === 'triage_days') return [];
+      if (key.indexOf('triage_cur_') === 0) return { shard: 0 };
+      return { entries: [] };
+    }
+    function clearKey(key, attempts) {
+      return pacedSet(key, emptyValueFor(key)).catch(function () {
+        if (attempts <= 1) return false;
+        return new Promise(function (res) { setTimeout(res, 250); })
+          .then(function () { return clearKey(key, attempts - 1); });
+      }).then(function (r) { return r !== false; });
+    }
+
+    // Clear strictly one at a time — this is a short list, and serialising it keeps
+    // every write inside what the bridge will accept.
+    function clearAll(list) {
+      var failed = [];
+      function step(i) {
+        if (i >= list.length) return Promise.resolve(failed);
+        btn.textContent = '⨯ Clearing ' + (i + 1) + '/' + list.length + '…';
+        return clearKey(list[i].key, 5).then(function (ok) {
+          if (!ok) failed.push(list[i].key);
+          return step(i + 1);
+        });
+      }
+      return step(0);
+    }
+
+    // Repeat scan-and-clear until a pass finds nothing, or stops making progress.
+    // Every pass is written to the report panel, so the outcome survives the run.
+    var passes = 0;
+    function pass() {
+      passes++;
+      return scanOccupied().then(function (occupied) {
+        var total = occupied.reduce(function (n, o) { return n + o.count; }, 0);
+        reportLine('Pass ' + passes + ': found ' + occupied.length + ' populated slot(s), ' +
+                   total + ' entries' + (scanFailures ? '  [' + scanFailures + ' unreadable slots]' : '') +
+                   (scanRateLimited ? '  [' + scanRateLimited + ' RATE LIMITED]' : ''));
+        if (occupied.length) formatOccupied(occupied).lines.forEach(reportLine);
+        if (!occupied.length) return { remaining: 0, keys: 0 };
+        return clearAll(occupied).then(function (failed) {
+          reportLine('         cleared ' + (occupied.length - failed.length) + '/' + occupied.length +
+                     (failed.length ? ', FAILED on ' + failed.length : ''));
+          if (failed.length) failed.slice(0, 10).forEach(function (k) { reportLine('           ! ' + k); });
+          if (failed.length && failed.length === occupied.length) {
+            // Nothing could be cleared this pass — stop rather than spin.
+            var stuck = occupied.reduce(function (n, o) { return n + o.count; }, 0);
+            return { remaining: stuck, keys: occupied.length };
+          }
+          if (passes >= 5) {
+            var left = occupied.reduce(function (n, o) { return n + o.count; }, 0);
+            return { remaining: left, keys: occupied.length };
+          }
+          return pass();
+        });
+      });
+    }
+
+    reportStart('Wipe all log data');
+    reportLine('Clearing mode: overwrite with empty value (client.db.delete was observed');
+    reportLine('  to resolve without removing the key, so it is not used)');
+
+    // Union the day index into the scan scope, but keep the fixed window too — the
+    // wipe deletes triage_days at the end, so a scope derived only from it would miss
+    // everything older on the next run.
+    dbGetRetry('triage_days', 3).then(function (resp) {
+      var idx = toDateList(resp);
+      reportLine('triage_days at start: ' + (idx.length ? idx.join(', ') : '(empty)'));
+      idx.forEach(function (dt) {
+        if (wipeDates.indexOf(dt) === -1) wipeDates.push(dt);
+      });
+    }).catch(function (e) {
+      reportLine('triage_days at start: READ FAILED (' + (e && e.message ? e.message : 'absent or throttled') + ')');
+    }).then(function () {
+      // Index plus a recent-days safety net, in case the index is stale or was cleared
+      // by an earlier run. Older orphans are Consolidate's job — a routine wipe cannot
+      // afford a 60-day sweep inside a ~50 req/min budget.
+      for (var d = 0; d < 14; d++) {
+        var dt = daysAgo(d);
+        if (wipeDates.indexOf(dt) === -1) wipeDates.push(dt);
+      }
+      wipeDates.sort().reverse();
+      reportLine('Scope: ' + wipeDates.length + ' dates (' +
+                 wipeDates[wipeDates.length - 1] + ' .. ' + wipeDates[0] + '), walking shards per day.');
+      reportLine('Paced at ~' + RATE_PER_MIN + ' req/min — ETA ~' + pacedEta(wipeDates.length * 2) + ' per pass.');
+      reportLine('');
+      return pass();
+    }).then(function (result) {
+      // Index and per-day counters last, once the buckets are actually gone.
+      return clearKey('triage_days', 4).then(function () {
+        var curKeys = wipeDates.map(function (dt) { return 'triage_cur_' + dt; });
+        function step(j) {
+          if (j >= curKeys.length) return Promise.resolve(result);
+          btn.textContent = '⨯ counters ' + (j + 1) + '/' + curKeys.length + '…';
+          return clearKey(curKeys[j], 2).then(function () { return step(j + 1); });
+        }
+        return step(0);
+      });
+    }).then(function (result) {
+      reportLine('');
+      // Leftovers only — the reader no longer restores from localStorage at all, so a
+      // surviving cache can no longer resurrect deleted records.
+      var cacheCleared = purgeLegacyCache();
+      reportLine('Legacy cache keys: ' + (cacheCleared < 0
+        ? 'localStorage unreadable (harmless — the reader no longer uses it)'
+        : cacheCleared + ' removed'));
+      allEntries = [];
+      rangeStore = {};
+
+      if (result.remaining > 0) {
+        reportLine('');
+        reportLine('RESULT: INCOMPLETE — ' + result.remaining + ' entries still stored across ' +
+                   result.keys + ' shard(s) after ' + passes + ' passes.');
+        reportLine('The clear is reporting success without removing data. Run Inspect to confirm.');
+        showError('Wipe incomplete: ' + result.remaining + ' entries remain. See the report above.');
+        btn.textContent = '⨯ ' + result.remaining + ' left — click to retry';
+        btn.disabled = false;
+        setTimeout(function () { loadData(); }, 500);
+        return;
+      }
+
+      reportLine('');
+      if (scanRateLimited) {
+        reportLine('RESULT: UNRELIABLE — ' + scanRateLimited + ' read(s) were rate limited, so the');
+        reportLine('final scan could not see the whole store. Anything it missed is still there.');
+        reportLine('Wait a minute and wipe again; repeat until this line reads 0.');
+        showError('Wipe hit the rate limit — result is unreliable. See the report above.');
+        btn.textContent = '⨯ rate limited — click to retry';
+        btn.disabled = false;
+        setTimeout(function () { loadData(); }, 500);
+        return;
+      }
+      reportLine('RESULT: cleared. ' + passes + ' pass(es), ' + scanReads + ' reads, ' +
+                 scanFailures + ' unreadable slot(s), 0 rate limited.');
+      reportLine('Run Inspect to independently confirm storage is empty.');
+      btn.textContent = '✓ Wiped — reloading…';
+      setTimeout(function () {
+        btn.disabled = false;
+        btn.textContent = LABEL;
+        loadData();
+      }, 1000);
+    }).catch(function (err) {
+      reportLine('');
+      reportLine('WIPE FAILED: ' + (err && err.message ? err.message : String(err)));
+      btn.disabled = false;
+      btn.textContent = LABEL;
+      showError('Wipe failed: ' + (err && err.message ? err.message : String(err)));
+    });
+  });
+
+  // Seed: write synthetic log entries straight to storage. Creates no tickets and
+  // makes no AI calls, so exercising the report at full scale costs nothing. Shapes
+  // the data like a real run — 30 days, a busy day that spans several shards, a mix
+  // of deflected/truncated/searching entries — so range, sharding, filter and stat
+  // behaviour can all be checked without spending anything. Sandbox use only.
+  document.getElementById('seed-btn').addEventListener('click', function () {
+    if (!client) return;
+    var btn = this;
+    var LABEL = '⊕ Seed 2,000 test entries';
+    var TOTAL = 2000, DAYS = 30;   // shards sized by the module-level SHARD_MAX
+    btn.disabled = true;
+
+    // Deterministic pseudo-random so repeat runs are comparable. Date.now()/Math.random
+    // are avoided deliberately — a fixed seed makes "did the count change?" meaningful.
+    var seedState = 12345;
+    function rnd() {
+      seedState = (seedState * 1103515245 + 12345) & 0x7fffffff;
+      return seedState / 0x7fffffff;
+    }
+
+    // Weight entries toward recent days, and give one day a heavy burst so the
+    // multi-shard path is genuinely exercised rather than assumed.
+    var byDate = {};
+    for (var i = 0; i < TOTAL; i++) {
+      var dayOffset = (i < 600) ? 1 : Math.floor(rnd() * DAYS);
+      var date = daysAgo(dayOffset);
+      (byDate[date] = byDate[date] || []).push(i);
+    }
+
+    var dates = Object.keys(byDate).sort().reverse();
+    var counter = 9000;
+    var writes = [];
+    function put(key, val) { writes.push(function () { return pacedSet(key, val); }); }
+
+    dates.forEach(function (date) {
+      var idxs = byDate[date];
+      var entries = idxs.map(function (n, k) {
+        counter++;
+        var deflected = rnd() < 0.12;
+        var base = new Date(date + 'T08:00:00').getTime();
+        var ts = base + Math.floor(rnd() * 14 * 3600 * 1000);
+        if (deflected) {
+          return {
+            ticket_id: counter, display_id: counter,
+            subject: '[SEED] Recurring notification ' + counter,
+            ts: ts, input_tokens: 0, output_tokens: 0, cost_usd: 0,
+            web_searches: 0, duration_ms: 1600 + Math.floor(rnd() * 900),
+            token_limit_hit: false, deflected: true,
+            deflect_type: ['admin_consent', 'quarantine_release', 'sqm_maintenance'][Math.floor(rnd() * 3)]
+          };
+        }
+        var searched = rnd() < 0.18;
+        var inTok = searched ? 12000 + Math.floor(rnd() * 16000) : 3600 + Math.floor(rnd() * 2600);
+        var outTok = 220 + Math.floor(rnd() * 420);
+        var truncated = outTok > 500 && rnd() < 0.35;
+        // Mix both providers into the seed so the Model column, its colour coding and its
+        // sort can be exercised without spending anything on real API calls.
+        var onOpenAi = rnd() < 0.4;
+        var seedProvider = onOpenAi ? 'openai' : 'anthropic';
+        var seedModel = onOpenAi ? 'gpt-5.6-terra' : 'claude-sonnet-5';
+        // Per-Mtok rates matching MODEL_PRICING_PER_MTOK in server.js for each model.
+        var inRate = onOpenAi ? 2 : 3;
+        var outRate = onOpenAi ? 12 : 15;
+        return {
+          ticket_id: counter, display_id: counter,
+          subject: '[SEED] Sample triaged ticket ' + counter,
+          ts: ts,
+          input_tokens: inTok, output_tokens: outTok,
+          cost_usd: (inTok / 1000000) * inRate + (outTok / 1000000) * outRate + (searched ? 0.01 : 0),
+          web_searches: searched ? 1 + Math.floor(rnd() * 2) : 0,
+          duration_ms: searched ? 11000 + Math.floor(rnd() * 4000) : 6500 + Math.floor(rnd() * 3500),
+          token_limit_hit: truncated,
+          provider: seedProvider,
+          model: seedModel
+        };
+      });
+
+      var shard = 0;
+      for (var j = 0; j < entries.length; j += SHARD_MAX) {
+        put('triage_d_' + date + '_' + shard, { entries: entries.slice(j, j + SHARD_MAX) });
+        shard++;
+      }
+      // Clear a couple of slots above the last one written so seeding over existing
+      // data doesn't strand shards behind the new short final shard. Only a couple:
+      // blanket-clearing 20 slots per day is 570 extra writes against a ~40/min paced
+      // budget. Deeper orphans are Consolidate's job — seed expects a wiped store.
+      for (var z = shard; z < shard + 2 && z < 20; z++) {
+        put('triage_d_' + date + '_' + z, { entries: [] });
+      }
+      put('triage_cur_' + date, { shard: Math.max(0, shard - 1) });
+    });
+    put('triage_days', dates);
+
+    reportStart('Seed test entries');
+    reportLine('Writing ' + TOTAL + ' synthetic entries across ' + dates.length + ' day(s).');
+    reportLine(writes.length + ' storage writes, paced at ~' + RATE_PER_MIN +
+               ' req/min — ETA ~' + pacedEta(writes.length) + '. Creates no tickets, costs nothing.');
+    reportLine('');
+
+    // Every write goes through the paced queue. A resolved 429 is a failure here too —
+    // treating it as success is how a "seeded" store ended up partially written.
+    function writeRetry(fn, attempts) {
+      return fn().then(function (v) {
+        if (isErrorPayload(v)) {
+          if (attempts <= 1) return false;
+          return new Promise(function (r) { setTimeout(r, 600); })
+            .then(function () { return writeRetry(fn, attempts - 1); });
+        }
+        return true;
+      }).catch(function () {
+        if (attempts <= 1) return false;
+        return new Promise(function (r) { setTimeout(r, 250); })
+          .then(function () { return writeRetry(fn, attempts - 1); });
+      }).then(function (r) { return r !== false; });
+    }
+    var failed = 0;
+    function step(i) {
+      if (i >= writes.length) return Promise.resolve();
+      btn.textContent = '⊕ ' + (i + 1) + '/' + writes.length + '…';
+      return writeRetry(writes[i], 5).then(function (ok) {
+        if (!ok) failed++;
+        return step(i + 1);
+      });
+    }
+
+    step(0).then(function () {
+      try {
+        Object.keys(localStorage).forEach(function (k) {
+          if (k.indexOf(CACHE_PREFIX) === 0) localStorage.removeItem(k);
+        });
+      } catch (e) {}
+      allEntries = [];
+      rangeStore = {};
+      if (failed) {
+        showError('Seed incomplete: ' + failed + ' of ' + writes.length + ' writes failed. Wipe and retry.');
+      }
+      btn.textContent = failed ? ('⊕ ' + failed + ' writes failed') : '✓ Seeded — reloading…';
+      setTimeout(function () {
+        btn.disabled = false;
+        btn.textContent = LABEL;
+        loadData();
+      }, 1000);
+    }).catch(function (err) {
+      btn.disabled = false;
+      btn.textContent = LABEL;
+      showError('Seed failed: ' + (err && err.message ? err.message : String(err)));
+    });
+  });
+
+  // ── utilities ─────────────────────────────────────────────────────────
+  // Range tabs are locked while a fetch is in flight. Reads already issued cannot be
+  // cancelled, so letting a second range start would put both sets of reads on the
+  // FDK bridge at once — and the newer generation (the one that actually gets applied)
+  // is then the more likely to be throttled into an empty result.
+  var loadWatchdog;
+  function setLoading(show) {
+    isLoading = show;
+    document.getElementById('loading-indicator').textContent = show ? 'Loading…' : '';
+    document.querySelectorAll('.range-tab').forEach(function (b) {
+      b.disabled = show;
+      b.classList.toggle('is-busy', show);
+    });
+    // The date inputs reach loadData() too, so they must be locked with the tabs —
+    // otherwise an edit during a fetch is silently discarded and the stats label
+    // (read live from the DOM) then disagrees with the table.
+    ['date-from', 'date-to'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.disabled = show;
+    });
+    clearTimeout(loadWatchdog);
+    if (show) {
+      // Never leave the controls locked if a fetch neither resolves nor rejects.
+      loadWatchdog = setTimeout(function () { setLoading(false); }, 30000);
+    }
+  }
+  function showError(msg) {
+    var el = document.getElementById('error-banner');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  // ── admin action reporting ────────────────────────────────────────────
+  // Admin actions write here instead of into their own button label. A destructive
+  // action must leave a record that outlives the action: the previous design reported
+  // results in the button, which reset after a second, so a wipe left no evidence of
+  // which slots it found, cleared, or failed on — and every diagnosis since has been
+  // guesswork as a direct result.
+  var reportLines = [];
+  function reportStart(title) {
+    reportLines = [];
+    document.getElementById('admin-report-title').textContent = title;
+    document.getElementById('admin-report-body').textContent = '';
+    document.getElementById('admin-report').style.display = '';
+  }
+  function reportLine(line) {
+    reportLines.push(line == null ? '' : String(line));
+    document.getElementById('admin-report-body').textContent = reportLines.join('\n');
+  }
+  document.getElementById('admin-report-close').addEventListener('click', function () {
+    document.getElementById('admin-report').style.display = 'none';
+  });
+
+  // Groups occupied slot keys by date for readable output:
+  //   2026-08-21  shard 0:100  shard 1:47   (147 entries)
+  function formatOccupied(occupied) {
+    var byDate = {};
+    occupied.forEach(function (o) {
+      var m = /^triage_d_(\d{4}-\d{2}-\d{2})_(\d+)$/.exec(o.key);
+      if (!m) return;
+      (byDate[m[1]] = byDate[m[1]] || []).push({ shard: Number(m[2]), count: o.count });
+    });
+    var dates = Object.keys(byDate).sort();
+    var out = [];
+    dates.forEach(function (d) {
+      var shards = byDate[d].sort(function (a, b) { return a.shard - b.shard; });
+      var total = shards.reduce(function (n, s) { return n + s.count; }, 0);
+      out.push('  ' + d + '  ' +
+        shards.map(function (s) { return 'shard ' + s.shard + ':' + s.count; }).join('  ') +
+        '   (' + total + ' entries)');
+    });
+    return { lines: out, dates: dates.length };
+  }
+
+  // Local cache state — the other candidate for "data came back after a wipe".
+  function cacheSummary() {
+    var out = [];
+    try {
+      Object.keys(localStorage).forEach(function (k) {
+        if (k.indexOf(CACHE_PREFIX) !== 0) return;
+        var n = '?';
+        try { n = (JSON.parse(localStorage.getItem(k)) || []).length; } catch (e) {}
+        out.push('  ' + k.slice(CACHE_PREFIX.length) + ' -> ' + n + ' entries');
+      });
+    } catch (e) {
+      out.push('  localStorage unreadable: ' + (e && e.message ? e.message : String(e)));
+    }
+    return out;
+  }
+  // Without this a single transient failure left a stale, misleading banner up for the
+  // rest of the session, sitting over every subsequent successful load.
+  function clearError() {
+    document.getElementById('error-banner').style.display = 'none';
+  }
+
+  // Init sort headers
+  updateSortHeaders();
+})();
+</script>
+</body>
+</html>

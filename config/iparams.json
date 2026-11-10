@@ -1,0 +1,137 @@
+{
+  "freshservice_domain": {
+    "display_name": "Freshservice Domain",
+    "description": "AI-Triage v1.8.2 (see CHANGELOG.md for release notes). Your Freshservice domain, host only, no https. Example: yourcompany.freshservice.com",
+    "type": "text",
+    "required": true,
+    "regex": {
+      "host-only": "^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$",
+      "host-only-error": "Enter the domain only, no https:// prefix or trailing slash — e.g. yourcompany.freshservice.com"
+    }
+  },
+  "freshservice_api_key": {
+    "display_name": "Freshservice API Key",
+    "description": "API key used to post the private triage note. Uses the scoped service agent key (least-privilege: read tickets/Solutions, write private notes only).",
+    "type": "text",
+    "required": true,
+    "secure": true
+  },
+  "ai_provider": {
+    "display_name": "AI Provider",
+    "description": "Which AI service performs the triage. Choose 'anthropic' (Claude), 'openai' (ChatGPT), or 'copilot' (Microsoft Copilot via Azure OpenAI). Fill in the API key and fields for whichever one you pick — the other providers' fields are ignored.",
+    "type": "dropdown",
+    "required": true,
+    "default_value": "anthropic",
+    "options": ["anthropic", "openai", "copilot"]
+  },
+  "anthropic_api_key": {
+    "display_name": "Anthropic API Key",
+    "description": "API key for the Anthropic Claude API (console.anthropic.com). Required only when AI Provider is 'anthropic'.",
+    "type": "text",
+    "required": false,
+    "secure": true
+  },
+  "claude_model": {
+    "display_name": "Claude Model",
+    "description": "Model ID used when AI Provider is 'anthropic'. Sonnet 5 is the default. Use claude-haiku-4-5-20251001 for the cheapest/fastest option.",
+    "type": "text",
+    "required": false,
+    "default_value": "claude-sonnet-5"
+  },
+  "openai_api_key": {
+    "display_name": "OpenAI API Key",
+    "description": "API key for the OpenAI API (platform.openai.com — note this is separate from a ChatGPT subscription and needs its own prepaid credit balance). Required only when AI Provider is 'openai'.",
+    "type": "text",
+    "required": false,
+    "secure": true
+  },
+  "openai_model": {
+    "display_name": "OpenAI Model",
+    "description": "Model ID used when AI Provider is 'openai'. gpt-5.6-terra balances cost and capability. Use gpt-5.6-luna for the cheapest option, or gpt-5.6-sol for the most capable.",
+    "type": "text",
+    "required": false,
+    "default_value": "gpt-5.6-terra"
+  },
+  "openai_host": {
+    "display_name": "OpenAI API Host",
+    "description": "Host for the OpenAI-compatible endpoint, no https. Leave as api.openai.com unless you are pointing at a different OpenAI-compatible service.",
+    "type": "text",
+    "required": false,
+    "default_value": "api.openai.com"
+  },
+  "copilot_api_key": {
+    "display_name": "Azure OpenAI API Key",
+    "description": "API key for your Azure OpenAI resource (found in Azure portal → your resource → Keys and Endpoint). Required only when AI Provider is 'copilot'.",
+    "type": "text",
+    "required": false,
+    "secure": true
+  },
+  "copilot_endpoint_host": {
+    "display_name": "Azure OpenAI Endpoint Host",
+    "description": "Host for your Azure OpenAI resource, no https. Example: my-resource.openai.azure.com. Required only when AI Provider is 'copilot'.",
+    "type": "text",
+    "required": false
+  },
+  "copilot_deployment": {
+    "display_name": "Azure OpenAI Deployment Name",
+    "description": "The deployment name you configured in Azure OpenAI Studio (e.g. gpt-4o-prod). This is the name in the URL path — NOT the underlying model name. Required only when AI Provider is 'copilot'.",
+    "type": "text",
+    "required": false
+  },
+  "copilot_api_version": {
+    "display_name": "Azure OpenAI API Version",
+    "description": "Azure OpenAI API version string. Defaults to 2025-01-01-preview. Only change if your deployment requires a different version.",
+    "type": "text",
+    "required": false,
+    "default_value": "2025-01-01-preview"
+  },
+  "copilot_model": {
+    "display_name": "Azure OpenAI Base Model (for cost reporting)",
+    "description": "The underlying model your Azure deployment is based on, e.g. gpt-4o or gpt-4o-mini. Used only for cost estimation in the report — does not affect the API call. Leave blank to suppress cost tracking.",
+    "type": "text",
+    "required": false,
+    "default_value": "gpt-4o"
+  },
+  "output_budget": {
+    "display_name": "Max Output Tokens",
+    "description": "Cap on the triage note length (max output tokens). Lower keeps latency well under the execution cap.",
+    "type": "number",
+    "required": true,
+    "default_value": 512
+  },
+  "enable_web_search": {
+    "display_name": "Enable web search grounding",
+    "description": "When enabled, the AI may search the web to ground triage notes with current, cited sources. Supported on both providers. WARNING: enabling web search increases per-ticket AI cost — roughly $0.01 per search plus extra tokens. Leave unchecked to disable.",
+    "type": "checkbox",
+    "required": false,
+    "default_value": false
+  },
+  "web_search_max_uses": {
+    "display_name": "Max web searches per ticket",
+    "description": "Upper bound on web searches per ticket (only applies when web search is enabled, and only enforceable on the Anthropic provider). Keeps cost and latency bounded under the execution cap.",
+    "type": "number",
+    "required": false,
+    "default_value": 3
+  },
+  "enable_deflection": {
+    "display_name": "Auto-respond to recurring tickets",
+    "description": "When enabled, known recurring/automated ticket types (admin consent, quarantine release, quarterly maintenance, Box/OneDrive links, employee termination) get a prewritten internal note that links the KB to follow and names the canned response to use — skipping the AI call entirely. Uncheck to send every ticket through AI triage.",
+    "type": "checkbox",
+    "required": false,
+    "default_value": true
+  },
+  "poc_group_id": {
+    "display_name": "PoC Group ID (gate)",
+    "description": "OPTIONAL PoC safety gate. If set, only tickets in this group are triaged; all others are skipped. Enter 0 to disable this gate and triage every new ticket. Use during PoC in the main environment to limit blast radius.",
+    "type": "number",
+    "required": false,
+    "default_value": 0
+  },
+  "poc_workspace_id": {
+    "display_name": "PoC Workspace ID (gate)",
+    "description": "OPTIONAL PoC safety gate. If set, only tickets in this workspace are triaged; all others are skipped. Enter 0 to disable this gate. Combine with PoC Group ID for a narrower gate, or use alone to cover an entire workspace (e.g. IT — workspace 2).",
+    "type": "number",
+    "required": false,
+    "default_value": 0
+  }
+}

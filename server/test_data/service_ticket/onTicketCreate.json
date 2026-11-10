@@ -1,0 +1,31 @@
+{
+  "data": {
+    "ticket": {
+      "id": 73740,
+      "subject": "Internal web dashboard is slow to load",
+      "description": "<div>The back end of the internal dashboard takes several minutes to load and it is getting slower.</div>",
+      "description_text": "The back end of the internal dashboard takes several minutes to load and it is getting slower.",
+      "status": 3,
+      "priority": 1,
+      "source": 1,
+      "group_id": 38000029012,
+      "requester_id": 38000677692,
+      "type": "Incident",
+      "category": null,
+      "sub_category": null
+    },
+    "requester": {
+      "id": 38000677692,
+      "name": "Test User",
+      "email": "test.user@example.com"
+    }
+  },
+  "iparams": {
+    "freshservice_domain": "example.freshservice.com",
+    "freshservice_api_key": "REPLACE_ME",
+    "anthropic_api_key": "REPLACE_ME",
+    "claude_model": "claude-haiku-4-5-20251001",
+    "output_budget": 512,
+    "poc_group_id": null
+  }
+}

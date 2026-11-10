@@ -1,0 +1,13 @@
+{
+  "name": "ai-triage",
+  "version": "1.8.2",
+  "description": "AI-powered ticket triage — instant private notes with summary, priority, and next steps. Provider-swappable between Anthropic Claude, OpenAI ChatGPT, and Microsoft Copilot (Azure OpenAI).",
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.6",
+    "vite": "^6.4.3",
+    "vitest": "^3.2.6"
+  },
+  "scripts": {
+    "fdk-unit-test": "vitest run --coverage"
+  }
+}

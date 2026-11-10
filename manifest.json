@@ -1,0 +1,34 @@
+{
+  "platform-version": "3.0",
+  "modules": {
+    "common": {
+      "requests": {
+        "anthropicMessages": {},
+        "openaiResponses": {},
+        "freshserviceAddNote": {},
+        "freshserviceKbSearch": {},
+        "freshserviceTicketFields": {}
+      },
+      "location": {
+        "full_page_app": {
+          "url": "index.html",
+          "icon": "icon.svg"
+        }
+      }
+    },
+    "service_ticket": {
+      "events": {
+        "onTicketCreate": {
+          "handler": "onTicketCreateHandler"
+        }
+      }
+    }
+  },
+  "engines": {
+    "node": "24.11.1",
+    "fdk": "10.1.9"
+  },
+  "scripts": {
+    "fdk-unit-test": "vitest run --coverage"
+  }
+}
